@@ -1,7 +1,7 @@
 import logging
 from telegram.ext import Application, CommandHandler, MessageHandler, filters
 from config import BOT_TOKEN
-from handlers import start, help_command, echo
+from handlers import start, help_command, echo, pdf_a_markdown
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -15,6 +15,7 @@ def main() -> None:
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_command))
+    app.add_handler(MessageHandler(filters.Document.PDF, pdf_a_markdown))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, echo))
 
     logger.info("Bot iniciado. Presiona Ctrl+C para detener.")
