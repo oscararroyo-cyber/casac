@@ -1,88 +1,79 @@
 """
-Sistema de estudio de francés – punto de entrada.
+Sistema de apuntes de Contabilidad Financiera Superior — modo interactivo.
+
+Para procesar un PDF o imágenes directamente usa:
+  python procesar_tema.py --tema "Nombre" --pdf manual.pdf --imagenes slides/
 
 Arquitectura multi-agente:
-  Catedrático (claude-opus-4-7)  → orquesta con tool use
-      ↓ buscar_contenido_frances
+  Catedrático (claude-opus-4-7)    → orquesta con tool use
+      ↓ buscar_contenido_contabilidad
   Investigador (claude-sonnet-4-6) → genera material educativo
-      ↓ ensenar_al_estudiante
-  Profesor (claude-sonnet-4-6)   → imparte la clase al estudiante
+      ↓ redactar_apuntes_tema
+  Profesor (claude-sonnet-4-6)     → redacta apuntes para el alumno
 """
 
 import sys
-from study_session import SesionEstudio
+from study_session import SesionContabilidad
 
 BANNER = """
-╔══════════════════════════════════════════════════════════════╗
-║           SISTEMA DE PREPARACIÓN AL EXAMEN DE FRANCÉS        ║
-║                                                              ║
-║   Catedrático  →  Investigador  →  Profesor  →  Tú          ║
-╚══════════════════════════════════════════════════════════════╝
+╔══════════════════════════════════════════════════════════════════╗
+║     SISTEMA DE APUNTES — CONTABILIDAD FINANCIERA SUPERIOR        ║
+║                                                                  ║
+║   Catedrático  →  Investigador  →  Profesor  →  Tú              ║
+╚══════════════════════════════════════════════════════════════════╝
 
-Áreas cubiertas:
-  • Vocabulario
-  • Gramática
-  • Expresión escrita
-  • Expresión oral
+Puedes preguntar sobre cualquier tema de Contabilidad Financiera:
+  • Inmovilizado material e intangible         • Leasing y arrendamientos
+  • Existencias y deterioro de valor           • Instrumentos financieros
+  • Provisiones y pasivos contingentes         • Impuesto sobre beneficios
+  • Subvenciones                               • Consolidación de CCFF
 
 Comandos especiales:
-  /temas     → ver temas estudiados en esta sesión
-  /nivel     → cambiar nivel (A1‥C1)
+  /temas     → ver temas tratados en esta sesión
+  /nuevo     → limpiar historial y empezar un tema nuevo
   /salir     → terminar la sesión
 """
 
 
-def pedir_nivel() -> str:
-    niveles = {"A1", "A2", "B1", "B2", "C1"}
-    while True:
-        nivel = input("¿Cuál es tu nivel actual de francés? (A1/A2/B1/B2/C1) [A2]: ").strip().upper() or "A2"
-        if nivel in niveles:
-            return nivel
-        print(f"  Nivel no válido. Elige entre: {', '.join(sorted(niveles))}")
-
-
 def main() -> None:
     print(BANNER)
-    nivel = pedir_nivel()
-    sesion = SesionEstudio(nivel=nivel)
+    sesion = SesionContabilidad()
 
-    print(f"\nSesión iniciada – nivel {nivel}.")
-    print("Escribe tu primera pregunta o 'Empieza la clase' para que el Catedrático planifique.\n")
-    print("─" * 64)
+    print("Escribe tu pregunta o el tema que quieres estudiar y el Profesor te explicará.\n")
+    print("─" * 66)
 
     while True:
         try:
             entrada = input("\nTú: ").strip()
         except (EOFError, KeyboardInterrupt):
-            print("\n\nAu revoir ! Bonne chance pour ton examen ! 🇫🇷")
+            print("\n\n¡Hasta la próxima! Mucho éxito en el estudio.")
             sys.exit(0)
 
         if not entrada:
             continue
 
         if entrada.lower() in ("/salir", "salir", "exit", "quit"):
-            print("\nAu revoir ! Bonne chance pour ton examen ! 🇫🇷")
+            print("\n¡Hasta la próxima! Mucho éxito en el estudio.")
             break
 
         if entrada.lower() == "/temas":
-            if sesion.temas_estudiados:
-                print("\nTemas estudiados en esta sesión:")
-                for t in sesion.temas_estudiados:
+            if sesion.temas_tratados:
+                print("\nTemas tratados en esta sesión:")
+                for t in sesion.temas_tratados:
                     print(f"  • {t}")
             else:
-                print("\nTodavía no has estudiado ningún tema.")
+                print("\nTodavía no se ha tratado ningún tema.")
             continue
 
-        if entrada.lower() == "/nivel":
-            nuevo = pedir_nivel()
-            sesion.catedratico.nivel = nuevo
-            print(f"Nivel actualizado a {nuevo}.")
+        if entrada.lower() == "/nuevo":
+            sesion = SesionContabilidad()
+            print("Sesión reiniciada.")
             continue
 
-        print("\n[El Catedrático está coordinando la lección…]\n")
+        print("\n[El Catedrático está coordinando la respuesta…]\n")
         respuesta = sesion.enviar_mensaje(entrada)
-        print(f"\nProfesor Marc:\n{respuesta}")
-        print("\n" + "─" * 64)
+        print(f"\nProfesor:\n{respuesta}")
+        print("\n" + "─" * 66)
 
 
 if __name__ == "__main__":

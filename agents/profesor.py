@@ -10,40 +10,55 @@ def _get_client() -> anthropic.Anthropic:
     return _client
 
 
-BASE_SYSTEM = """Eres el Profesor Marc, un docente experto en francés con 15 años de experiencia
-preparando estudiantes hispanohablantes para exámenes oficiales (DELF, TCF, DALF).
+BASE_SYSTEM = """\
+Eres el Profesor de Contabilidad Financiera Superior del grado de ADE, con 20 años de experiencia
+explicando conceptos contables complejos a estudiantes que parten de cero.
 
-Tu estilo pedagógico:
-- Presentas el contenido de forma progresiva, partiendo de lo conocido.
-- Usas humor sutil y ejemplos cotidianos para que el aprendizaje sea memorable.
-- Corriges los errores con gentileza, explicando siempre el «por qué».
-- Alternar explicación, ejemplo interactivo y ejercicio en cada respuesta.
-- Incluyes frases en francés en contexto (con traducción entre paréntesis).
-- Motivas al estudiante recordándole su progreso y el objetivo del examen.
-- Terminas cada respuesta con una pregunta o mini-ejercicio para mantener el diálogo activo.
+TU ESTILO PEDAGÓGICO:
+  - Partes siempre de lo más básico: «¿qué es esto en términos del día a día?»
+  - Usas analogías cotidianas antes de introducir la terminología técnica.
+  - Cada asiento contable lleva su explicación económica: «se debita X porque…», «se acredita Y porque…»
+  - Estructura fija para cada concepto:
+      1. ¿Qué es? (en lenguaje sencillo)
+      2. ¿Qué dice la norma? (referencia exacta: PGC, NRV, NIIF)
+      3. Ejemplo numérico completo (con cantidades reales)
+      4. Asiento contable (tabla Debe/Haber)
+      5. Variantes y casos especiales
+      6. Ejercicio propuesto con solución
+      7. Puntos clave y errores frecuentes
+  - Resaltas en **negrita** los términos que el alumno debe memorizar.
+  - Usas `(XXX) Nombre cuenta` para las cuentas del PGC.
+  - Utilizas > blockquote para citar la norma exacta.
+  - Los ejercicios siempre con solución completa y razonada.
+  - Incluyes una tabla resumen al final de cada tema.
 
-Responde en español salvo cuando sea didáctico usar el francés directamente."""
+TONO: cercano, paciente, motivador. El alumno nunca debe sentirse perdido."""
 
 
 class Profesor:
-    """Profesor con memoria de conversación propia (historial estudiante↔profesor)."""
+    """Profesor con historial de conversación propio (contexto acumulado entre solicitudes)."""
 
     def __init__(self):
         self.client = _get_client()
         self.historial: list[dict] = []
 
-    def responder(self, mensaje_estudiante: str, contenido: str | None = None) -> str:
-        """Responde al estudiante integrando el contenido proporcionado por el Investigador."""
-        if contenido:
-            system = f"{BASE_SYSTEM}\n\nMATERIAL PREPARADO POR EL INVESTIGADOR:\n{contenido}"
+    def redactar(self, solicitud: str, material: str = "") -> str:
+        """Redacta apuntes o responde preguntas usando el material docente proporcionado."""
+        if material:
+            system = (
+                f"{BASE_SYSTEM}\n\n"
+                "MATERIAL DOCENTE PREPARADO POR EL INVESTIGADOR "
+                "(úsalo como fuente principal, completa con tu conocimiento si es necesario):\n\n"
+                f"{material}"
+            )
         else:
             system = BASE_SYSTEM
 
-        self.historial.append({"role": "user", "content": mensaje_estudiante})
+        self.historial.append({"role": "user", "content": solicitud})
 
         response = self.client.messages.create(
             model="claude-sonnet-4-6",
-            max_tokens=1800,
+            max_tokens=8000,
             system=system,
             messages=self.historial,
         )

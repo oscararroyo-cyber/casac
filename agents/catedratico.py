@@ -1,15 +1,14 @@
-import json
 import anthropic
-from agents.investigador import buscar_contenido
+from agents.investigador import buscar_contenido, estructurar_material
 from agents.profesor import Profesor
 
 TOOLS: list[dict] = [
     {
-        "name": "buscar_contenido_frances",
+        "name": "buscar_contenido_contabilidad",
         "description": (
-            "Encarga al Investigador que prepare material educativo de francés sobre un tema "
-            "concreto. Úsalo cuando necesites contenido nuevo antes de que el Profesor imparta "
-            "una lección."
+            "Encarga al Investigador que genere material educativo de Contabilidad Financiera "
+            "sobre un tema concreto. Úsalo cuando necesites ampliar o completar el material "
+            "docente antes de que el Profesor redacte los apuntes."
         ),
         "input_schema": {
             "type": "object",
@@ -17,120 +16,131 @@ TOOLS: list[dict] = [
                 "tema": {
                     "type": "string",
                     "description": (
-                        "Tema específico (ej.: 'presente de indicativo verbos irregulares', "
-                        "'vocabulario de la alimentación', 'rédaction d'une lettre formelle')."
+                        "Tema contable específico (ej.: 'inmovilizado material', "
+                        "'deterioro de valor de créditos', 'operaciones de leasing', "
+                        "'consolidación de estados financieros')."
                     ),
                 },
                 "tipo": {
                     "type": "string",
-                    "enum": ["vocabulario", "gramática", "expresión escrita", "expresión oral"],
-                    "description": "Categoría del contenido.",
-                },
-                "nivel": {
-                    "type": "string",
-                    "enum": ["A1", "A2", "B1", "B2", "C1"],
-                    "description": "Nivel MCER del estudiante.",
+                    "enum": ["concepto", "norma", "asientos", "valoración", "ejercicios", "comparativa"],
+                    "description": "Tipo de contenido a generar.",
                 },
             },
-            "required": ["tema", "tipo", "nivel"],
+            "required": ["tema", "tipo"],
         },
     },
     {
-        "name": "ensenar_al_estudiante",
+        "name": "redactar_apuntes_tema",
         "description": (
-            "Delega al Profesor para que responda al estudiante e imparta la lección. "
-            "SIEMPRE debe ser la última herramienta llamada en cada turno, ya que su salida "
-            "es la respuesta que verá el estudiante."
+            "Delega al Profesor para que redacte apuntes claros y comprensibles del tema. "
+            "SIEMPRE debe ser la última herramienta llamada en cada turno. "
+            "Su salida es el documento final de apuntes que verá el alumno."
         ),
         "input_schema": {
             "type": "object",
             "properties": {
-                "mensaje_estudiante": {
+                "solicitud": {
                     "type": "string",
-                    "description": "Mensaje o pregunta exacta del estudiante.",
+                    "description": "Descripción de qué apuntes debe redactar el Profesor.",
                 },
                 "directriz": {
                     "type": "string",
                     "description": (
-                        "Instrucción del Catedrático al Profesor: qué aspecto enfatizar, "
-                        "qué ejercicio proponer, cómo abordar la dificultad detectada, etc."
+                        "Instrucción pedagógica del Catedrático: qué enfatizar, cómo estructurar, "
+                        "qué nivel de detalle usar, qué ejercicios incluir, etc."
                     ),
                 },
             },
-            "required": ["mensaje_estudiante"],
+            "required": ["solicitud"],
         },
     },
 ]
 
 SYSTEM_CATEDRATICO = """\
-Eres el Catedrático Director de un programa intensivo de preparación al examen de francés.
-Diriges un equipo de dos agentes: el Investigador (genera material) y el Profesor (imparte la clase).
+Eres el Catedrático de Contabilidad Financiera Superior del grado de ADE.
+Diriges un equipo pedagógico: el Investigador (genera y estructura material) y el Profesor (redacta apuntes).
 
-ÁREAS DEL EXAMEN:
-  1. Vocabulario
-  2. Gramática
-  3. Expresión escrita
-  4. Expresión oral
+TU MISIÓN:
+  Supervisar la elaboración de apuntes claros y completos para alumnos SIN conocimientos previos
+  de contabilidad, usando como base el material docente proporcionado (manual + diapositivas).
 
-TU FLUJO DE TRABAJO POR TURNO:
-  a) Analiza el mensaje del estudiante y su historial de progreso.
-  b) Decide si necesitas nuevo contenido → llama a `buscar_contenido_frances`.
-  c) Siempre finaliza llamando a `ensenar_al_estudiante` con la directriz pedagógica adecuada.
+FLUJO DE TRABAJO POR TURNO:
+  a) Analiza el material docente disponible y el historial del alumno.
+  b) Si detectas lagunas o necesitas ampliar algún punto → llama a `buscar_contenido_contabilidad`.
+  c) Siempre finaliza llamando a `redactar_apuntes_tema` con la directriz pedagógica precisa.
+
+DIRECTRICES PEDAGÓGICAS QUE DEBES TRANSMITIR AL PROFESOR:
+  - Explicar cada concepto partiendo de cero, sin asumir conocimientos previos.
+  - Usar analogías del día a día para conceptos abstractos.
+  - Cada asiento contable debe incluir el razonamiento económico ("¿por qué se debita X?").
+  - Estructurar: concepto → norma → ejemplo numérico → asiento → variantes → ejercicio.
+  - Los ejercicios siempre con solución completa paso a paso.
+  - Terminar con un resumen de puntos clave y errores frecuentes.
 
 REGLAS:
-  - Nunca respondas tú directamente al estudiante; la respuesta siempre la da el Profesor.
-  - Distribuye las lecciones equilibrando las cuatro áreas.
-  - Si el estudiante tiene dificultades en un tema, pide al Investigador contenido adicional
-    y al Profesor que refuerce con más ejercicios.
-  - Ajusta el nivel y ritmo según el rendimiento percibido.
+  - Nunca respondas tú directamente; la respuesta siempre la da el Profesor.
+  - El documento final debe poder leerse de forma autónoma (auto-contenido).
+  - Si el material docente cubre el tema, priorízalo sobre el conocimiento propio.
 """
 
 
 class Catedratico:
-    def __init__(self, nivel: str = "A2"):
+    def __init__(self):
         self.client = anthropic.Anthropic()
-        self.nivel = nivel
-        self.temas_estudiados: list[str] = []
-        self.contenido_actual: str | None = None
+        self.temas_tratados: list[str] = []
+        self.material_actual: str = ""
         self.profesor = Profesor()
 
-    def _ejecutar_herramienta(self, nombre: str, inputs: dict) -> str:
-        if nombre == "buscar_contenido_frances":
-            nivel = inputs.get("nivel", self.nivel)
-            tema = inputs["tema"]
-            tipo = inputs["tipo"]
-            print(f"\n  [Investigador] Preparando {tipo} → {tema} (nivel {nivel})…")
-            contenido = buscar_contenido(tema=tema, tipo=tipo, nivel=nivel)
-            self.contenido_actual = contenido
-            clave = f"{tipo}:{tema}"
-            if clave not in self.temas_estudiados:
-                self.temas_estudiados.append(clave)
-            return f"Contenido listo: {tipo} sobre «{tema}» (nivel {nivel})."
+    def cargar_material(self, pdf_md: str = "", imagenes_md: str = "", tema: str = "") -> None:
+        """Carga el material docente (PDF + imágenes) y lo estructura con el Investigador."""
+        if not pdf_md and not imagenes_md:
+            return
+        print("  [Investigador] Estructurando material docente…")
+        self.material_actual = estructurar_material(pdf_md, imagenes_md, tema)
 
-        if nombre == "ensenar_al_estudiante":
-            directriz = inputs.get("directriz", "")
-            mensaje = inputs["mensaje_estudiante"]
-            if directriz:
-                mensaje_interno = f"[Directriz del Catedrático: {directriz}]\n\n{mensaje}"
+    def _ejecutar_herramienta(self, nombre: str, inputs: dict) -> str:
+        if nombre == "buscar_contenido_contabilidad":
+            tema = inputs["tema"]
+            tipo = inputs.get("tipo", "concepto")
+            print(f"\n  [Investigador] Buscando {tipo} → {tema}…")
+            contenido = buscar_contenido(tema=tema, tipo=tipo)
+            if self.material_actual:
+                self.material_actual += f"\n\n---\n\n## Contenido adicional: {tema}\n\n{contenido}"
             else:
-                mensaje_interno = mensaje
-            print("  [Profesor] Preparando respuesta…")
-            return self.profesor.responder(
-                mensaje_estudiante=mensaje_interno,
-                contenido=self.contenido_actual,
+                self.material_actual = contenido
+            clave = f"{tipo}:{tema}"
+            if clave not in self.temas_tratados:
+                self.temas_tratados.append(clave)
+            return f"Contenido generado: {tipo} sobre «{tema}»."
+
+        if nombre == "redactar_apuntes_tema":
+            solicitud = inputs["solicitud"]
+            directriz = inputs.get("directriz", "")
+            if directriz:
+                mensaje_interno = f"[Directriz del Catedrático: {directriz}]\n\n{solicitud}"
+            else:
+                mensaje_interno = solicitud
+            print("  [Profesor] Redactando apuntes…")
+            return self.profesor.redactar(
+                solicitud=mensaje_interno,
+                material=self.material_actual,
             )
 
         return f"Herramienta desconocida: {nombre}"
 
-    def orquestar(self, mensaje_usuario: str) -> str:
-        """Ejecuta el agentic loop del Catedrático y devuelve la respuesta del Profesor."""
-        progreso = (
-            ", ".join(self.temas_estudiados) if self.temas_estudiados else "ninguno aún"
+    def orquestar(self, solicitud: str) -> str:
+        """Ejecuta el agentic loop del Catedrático y devuelve los apuntes del Profesor."""
+        temas_str = ", ".join(self.temas_tratados) if self.temas_tratados else "ninguno aún"
+        material_str = (
+            f"\n\nMATERIAL DOCENTE DISPONIBLE:\n{self.material_actual}"
+            if self.material_actual
+            else "\n\nNo hay material docente cargado aún."
         )
+
         contexto = (
-            f"Nivel del estudiante: {self.nivel}\n"
-            f"Temas ya tratados: {progreso}\n\n"
-            f"Mensaje del estudiante:\n{mensaje_usuario}"
+            f"Temas ya tratados: {temas_str}{material_str}\n\n"
+            f"Solicitud actual:\n{solicitud}"
         )
 
         messages: list[dict] = [{"role": "user", "content": contexto}]
@@ -140,7 +150,6 @@ class Catedratico:
             response = self.client.messages.create(
                 model="claude-opus-4-7",
                 max_tokens=4096,
-                thinking={"type": "adaptive"},
                 system=SYSTEM_CATEDRATICO,
                 tools=TOOLS,
                 messages=messages,
@@ -159,7 +168,7 @@ class Catedratico:
                     if block.type == "tool_use":
                         print(f"\n[Catedrático → {block.name}]")
                         resultado = self._ejecutar_herramienta(block.name, block.input)
-                        if block.name == "ensenar_al_estudiante":
+                        if block.name == "redactar_apuntes_tema":
                             respuesta_final = resultado
                         resultados.append({
                             "type": "tool_result",
