@@ -10,6 +10,14 @@ Arquitectura multi-agente:
 """
 
 import sys
+import io
+
+# Windows: forzar UTF-8 para que los caracteres especiales se muestren correctamente
+if sys.platform == "win32":
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
+    sys.stdin = io.TextIOWrapper(sys.stdin.buffer, encoding="utf-8", errors="replace")
+
 from study_session import SesionEstudio
 
 BANNER = """
